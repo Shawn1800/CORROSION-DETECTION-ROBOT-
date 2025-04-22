@@ -1,2 +1,1 @@
-# CORROSION-DETECTION-ROBOT-
-.
+# Autonomous Corrosion Detection Robot
