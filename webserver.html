@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Corrosion Detection Robot</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        
+        .container {
+            max-width: 1200px;
+        }
+        
+        .card {
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            box-shadow: 0 8px 20px rgba(255, 0, 0, 0.2);
+        }
+        
+        .control-btn {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .control-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .control-btn::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 5px;
+            height: 5px;
+            background: rgba(255, 0, 0, 0.5);
+            opacity: 0;
+            border-radius: 100%;
+            transform: scale(1, 1) translate(-50%, -50%);
+            transform-origin: 50% 50%;
+        }
+        
+        .control-btn:active::after {
+            opacity: 1;
+            animation: ripple 0.6s ease-out;
+        }
+        
+        @keyframes ripple {
+            0% {
+                transform: scale(0, 0) translate(-50%, -50%);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(20, 20) translate(-50%, -50%);
+                opacity: 0;
+            }
+        }
+        
+        .animate-pulse-slow {
+            animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.6;
+            }
+        }
+        
+        .ultrasonic-bar {
+            height: 8px;
+            transition: width 0.5s ease, background-color 0.5s ease;
+        }
+
+        .joystick-container {
+            display: grid;
+            grid-template-areas:
+                ". up ."
+                "left center right"
+                ". down .";
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: 1fr 1fr 1fr;
+            gap: 8px;
+            width: 220px;
+            height: 220px;
+            margin: 0 auto;
+        }
+        
+        .btn-up { grid-area: up; }
+        .btn-left { grid-area: left; }
+        .btn-center { grid-area: center; }
+        .btn-right { grid-area: right; }
+        .btn-down { grid-area: down; }
+        
+        .radar-container {
+            position: relative;
+            width: 240px;
+            height: 240px;
+            margin: 0 auto;
+            border-radius: 50%;
+            background: radial-gradient(circle, #1a1a1a 0%, #121212 100%);
+            border: 1px solid #333;
+            overflow: hidden;
+        }
+        
+        .radar-sweep {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(90deg, rgba(255, 0, 0, 0) 0%, rgba(255, 0, 0, 0.2) 100%);
+            transform-origin: left center;
+            animation: sweep 4s infinite linear;
+        }
+        
+        @keyframes sweep {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .distance-circle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            border-radius: 50%;
+            border: 1px dashed rgba(255, 0, 0, 0.3);
+            transform: translate(-50%, -50%);
+        }
+        
+        .indicator {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background-color: #ff3333;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #ff0000;
+            transition: transform 0.5s ease;
+        }
+        
+        .front-indicator {
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        
+        .rear-indicator {
+            bottom: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+    </style>
+</head>
+<body class="py-6">
+    <div class="container mx-auto px-4">
+        <h1 class="text-3xl font-bold text-center mb-6 text-red-500">Corrosion Detection Robot</h1>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Video Feed -->
+            <div class="card rounded-lg p-4">
+                <h2 class="text-xl font-semibold mb-4 text-gray-300 border-b border-gray-700 pb-2">Live Video Feed</h2>
+                <div class="relative">
+                    <img src="/video_feed" class="w-full rounded-lg shadow-lg" alt="Video Feed">
+                    <div class="absolute top-4 left-4 h-3 w-3 bg-red-500 rounded-full animate-pulse-slow"></div>
+                    <div class="absolute top-4 right-4 text-xs text-gray-300 bg-black bg-opacity-50 px-2 py-1 rounded">LIVE</div>
+                </div>
+                
+                <div id="alert" class="mt-4 bg-red-900 bg-opacity-60 p-4 rounded-lg hidden">
+                    <div class="flex items-center mb-2">
+                        <svg class="w-6 h-6 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                        <span class="font-bold text-red-400">Corrosion Detected!</span>
+                    </div>
+                    <img id="alertImage" src="" alt="Corrosion Alert" class="w-full rounded-lg">
+                </div>
+            </div>
+            
+            <!-- Controls -->
+            <div class="card rounded-lg p-4">
+                <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+                    <h2 class="text-xl font-semibold text-gray-300">Robot Controls</h2>
+                    <div class="flex items-center">
+                        <span class="mr-2 text-gray-400">Mode:</span>
+                        <span id="mode" class="px-3 py-1 rounded-full bg-gray-800 text-gray-300 text-sm font-medium">Manual</span>
+                    </div>
+                </div>
+                
+                <div class="joystick-container mb-6">
+                    <button onclick="sendCommand('forward')" class="control-btn btn-up bg-gray-800 hover:bg-gray-700 text-white rounded-lg flex items-center justify-center">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+                        </svg>
+                    </button>
+                    <button onclick="sendCommand('left')" class="control-btn btn-left bg-gray-800 hover:bg-gray-700 text-white rounded-lg flex items-center justify-center">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                        </svg>
+                    </button>
+                    <button onclick="sendCommand('stop')" class="control-btn btn-center bg-red-900 hover:bg-red-800 text-white rounded-lg flex items-center justify-center">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                    <button onclick="sendCommand('right')" class="control-btn btn-right bg-gray-800 hover:bg-gray-700 text-white rounded-lg flex items-center justify-center">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                    <button onclick="sendCommand('backward')" class="control-btn btn-down bg-gray-800 hover:bg-gray-700 text-white rounded-lg flex items-center justify-center">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="flex justify-center mb-6">
+                    <button onclick="toggleAutonomous()" class="bg-red-700 hover:bg-red-600 text-white font-medium py-2 px-6 rounded-lg flex items-center transition-all duration-300">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        Toggle Autonomous Mode
+                    </button>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-gray-800 rounded-lg p-4">
+                        <div class="flex items-center mb-2">
+                            <svg class="w-5 h-5 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                            </svg>
+                            <span class="text-gray-300 font-medium">Front Ultrasonic</span>
+                        </div>
+                        <div class="flex items-end">
+                            <span id="ultrasonic1" class="text-2xl font-bold text-red-400 transition-all duration-300">N/A</span>
+                            <span class="text-gray-400 ml-2">cm</span>
+                        </div>
+                        <div class="w-full bg-gray-900 rounded-full h-2 mt-2 overflow-hidden">
+                            <div id="ultrasonic1-bar" class="ultrasonic-bar bg-red-600 rounded-full" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-800 rounded-lg p-4">
+                        <div class="flex items-center mb-2">
+                            <svg class="w-5 h-5 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                            </svg>
+                            <span class="text-gray-300 font-medium">Rear Ultrasonic</span>
+                        </div>
+                        <div class="flex items-end">
+                            <span id="ultrasonic2" class="text-2xl font-bold text-red-400 transition-all duration-300">N/A</span>
+                            <span class="text-gray-400 ml-2">cm</span>
+                        </div>
+                        <div class="w-full bg-gray-900 rounded-full h-2 mt-2 overflow-hidden">
+                            <div id="ultrasonic2-bar" class="ultrasonic-bar bg-red-600 rounded-full" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Radar Section -->
+        <div class="card rounded-lg p-4 mt-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-300 border-b border-gray-700 pb-2">Proximity Radar</h2>
+            <div class="radar-container">
+                <div class="radar-sweep"></div>
+                
+                <!-- Distance circles -->
+                <div class="distance-circle" style="width: 60px; height: 60px;"></div>
+                <div class="distance-circle" style="width: 120px; height: 120px;"></div>
+                <div class="distance-circle" style="width: 180px; height: 180px;"></div>
+                
+                <!-- Robot center indicator -->
+                <div class="absolute top-1/2 left-1/2 w-4 h-4 bg-gray-400 rounded-full transform -translate-x-1/2 -translate-y-1/2"></div>
+                
+                <!-- Sensor indicators -->
+                <div id="front-indicator" class="indicator front-indicator"></div>
+                <div id="rear-indicator" class="indicator rear-indicator"></div>
+                
+                <!-- Labels -->
+                <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-gray-500 text-xs">Robot</div>
+                <div class="absolute top-5 left-1/2 transform -translate-x-1/2 text-red-400 text-xs">Front</div>
+                <div class="absolute bottom-5 left-1/2 transform -translate-x-1/2 text-red-400 text-xs">Rear</div>
+                
+                <div class="absolute top-1/4 right-1/4 text-gray-500 text-xs">50cm</div>
+                <div class="absolute bottom-1/4 right-1/4 text-gray-500 text-xs">50cm</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Button ripple effect
+        document.querySelectorAll('.control-btn').forEach(button => {
+            button.addEventListener('mousedown', function() {
+                this.classList.add('active');
+                
+                // Create ripple effect
+                let ripple = document.createElement('span');
+                ripple.classList.add('ripple');
+                this.appendChild(ripple);
+                
+                // Remove ripple after animation
+                setTimeout(() => {
+                    ripple.remove();
+                }, 600);
+            });
+            
+            button.addEventListener('mouseup', function() {
+                this.classList.remove('active');
+            });
+        });
+        
+        // Send command function (from kali.html)
+        function sendCommand(command) {
+            fetch(`/control/${command}`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    console.log(`Command ${command}: ${data.success ? 'Success' : 'Failed'}`);
+                    
+                    // Add button press animation
+                    const buttonMap = {
+                        'forward': '.btn-up',
+                        'backward': '.btn-down',
+                        'left': '.btn-left',
+                        'right': '.btn-right',
+                        'stop': '.btn-center'
+                    };
+                    
+                    const button = document.querySelector(buttonMap[command]);
+                    if (button) {
+                        // Add flash animation
+                        button.style.backgroundColor = '#ff3333';
+                        setTimeout(() => {
+                            button.style.backgroundColor = command === 'stop' ? '#7f1d1d' : '#1f2937';
+                        }, 200);
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+        
+        // Toggle autonomous function (from kali.html)
+        function toggleAutonomous() {
+            fetch('/toggle_autonomous', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    const modeElement = document.getElementById('mode');
+                    modeElement.textContent = data.autonomous ? 'Autonomous' : 'Manual';
+                    
+                    // Update styling
+                    if (data.autonomous) {
+                        modeElement.className = 'px-3 py-1 rounded-full bg-red-900 text-red-300 text-sm font-medium';
+                    } else {
+                        modeElement.className = 'px-3 py-1 rounded-full bg-gray-800 text-gray-300 text-sm font-medium';
+                    }
+                    
+                    // Add animation
+                    anime({
+                        targets: modeElement,
+                        scale: [1, 1.1, 1],
+                        duration: 300,
+                        easing: 'easeInOutQuad'
+                    });
+                })
+                .catch(error => console.error('Error:', error));
+        }
+        
+        // Update ultrasonic function (enhanced from kali.html)
+        function updateSensors() {
+            fetch('/sensors')
+                .then(response => response.json())
+                .then(data => {
+                    const front = data.ultrasonic1 !== null ? data.ultrasonic1.toFixed(1) : 'N/A';
+                    const rear = data.ultrasonic2 !== null ? data.ultrasonic2.toFixed(1) : 'N/A';
+                    
+                    // Update text values
+                    const frontElement = document.getElementById('ultrasonic1');
+                    const rearElement = document.getElementById('ultrasonic2');
+                    
+                    if (frontElement.textContent !== front) {
+                        frontElement.textContent = front;
+                        highlightElement(frontElement);
+                    }
+                    
+                    if (rearElement.textContent !== rear) {
+                        rearElement.textContent = rear;
+                        highlightElement(rearElement);
+                    }
+                    
+                    // Update progress bars
+                    if (data.ultrasonic1 !== null) {
+                        updateUltrasonicBar('ultrasonic1-bar', data.ultrasonic1);
+                        updateRadarIndicator('front-indicator', data.ultrasonic1);
+                    }
+                    
+                    if (data.ultrasonic2 !== null) {
+                        updateUltrasonicBar('ultrasonic2-bar', data.ultrasonic2);
+                        updateRadarIndicator('rear-indicator', data.ultrasonic2);
+                    }
+                    
+                    // Update mode display
+                    document.getElementById('mode').textContent = data.mode || 'Manual';
+                })
+                .catch(error => console.error('Error fetching sensor data:', error));
+        }
+        
+        function highlightElement(element) {
+            // Add highlight animation
+            anime({
+                targets: element,
+                scale: [1, 1.1, 1],
+                color: ['#f87171', '#f87171', '#f87171'],
+                duration: 500,
+                easing: 'easeInOutQuad'
+            });
+        }
+        
+        function updateUltrasonicBar(elementId, value) {
+            const maxDistance = 150; // Maximum distance (cm)
+            const percentage = Math.min(100, Math.max(0, (1 - value / maxDistance) * 100));
+            const barElement = document.getElementById(elementId);
+            
+            barElement.style.width = `${percentage}%`;
+            
+            // Change color based on distance
+            if (value < 20) {
+                barElement.style.backgroundColor = '#ef4444'; // bright red for very close
+            } else if (value < 50) {
+                barElement.style.backgroundColor = '#f97316'; // orange for medium distance
+            } else {
+                barElement.style.backgroundColor = '#84cc16'; // green for safe distance
+            }
+        }
+        
+        function updateRadarIndicator(elementId, value) {
+            const indicator = document.getElementById(elementId);
+            const maxDistance = 100; // Maximum radar distance (cm)
+            const distance = Math.min(maxDistance, value);
+            const scale = distance / maxDistance;
+            
+            if (elementId === 'front-indicator') {
+                // Calculate position for front indicator (top half of radar)
+                const angle = Math.PI / 2; // 90 degrees (pointing up)
+                const x = Math.cos(angle) * distance * 1.1;
+                const y = -Math.sin(angle) * distance * 1.1;
+                indicator.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+            } else {
+                // Calculate position for rear indicator (bottom half of radar)
+                const angle = 3 * Math.PI / 2; // 270 degrees (pointing down)
+                const x = Math.cos(angle) * distance * 1.1;
+                const y = -Math.sin(angle) * distance * 1.1;
+                indicator.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+            }
+            
+            // Adjust size based on distance (closer = larger)
+            const size = 12 - scale * 6;
+            indicator.style.width = `${size}px`;
+            indicator.style.height = `${size}px`;
+            
+            // Change color and pulsation based on distance
+            if (value < 20) {
+                indicator.style.backgroundColor = '#ef4444';
+                indicator.style.boxShadow = '0 0 15px #ff0000';
+                indicator.style.animation = 'pulse 0.5s infinite alternate';
+            } else if (value < 50) {
+                indicator.style.backgroundColor = '#f97316';
+                indicator.style.boxShadow = '0 0 10px #f97316';
+                indicator.style.animation = 'pulse 1s infinite alternate';
+            } else {
+                indicator.style.backgroundColor = '#84cc16';
+                indicator.style.boxShadow = '0 0 5px #84cc16';
+                indicator.style.animation = 'none';
+            }
+        }
+        
+        // Check for corrosion alerts
+        function checkAlert() {
+            fetch('/get_alert')
+                .then(response => response.json())
+                .then(data => {
+                    const alertBox = document.getElementById('alert');
+                    if (data.alert) {
+                        alertBox.classList.remove('hidden');
+                        document.getElementById('alertImage').src = data.image;
+                        
+                        // Add alert animation
+                        anime({
+                            targets: alertBox,
+                            translateY: [20, 0],
+                            opacity: [0, 1],
+                            duration: 500,
+                            easing: 'easeOutQuad'
+                        });
+                    } else {
+                        alertBox.classList.add('hidden');
+                    }
+                })
+                .catch(error => console.error('Error checking alerts:', error));
+        }
+        
+        // Update sensors and alerts every second
+        setInterval(updateSensors, 500); // More frequent updates for smoother UI
+        setInterval(checkAlert, 1000);
+        
+        // Add some random radar blips for visual effect
+        function addRandomBlips() {
+            const radar = document.querySelector('.radar-container');
+            const blip = document.createElement('div');
+            blip.classList.add('absolute', 'bg-red-500', 'rounded-full');
+            
+            // Random position
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 30 + Math.random() * 100;
+            const x = Math.cos(angle) * distance;
+            const y = Math.sin(angle) * distance;
+            
+            // Set size and position
+            blip.style.width = '4px';
+            blip.style.height = '4px';
+            blip.style.left = `calc(50% + ${x}px)`;
+            blip.style.top = `calc(50% + ${y}px)`;
+            blip.style.boxShadow = '0 0 5px #ff0000';
+            
+            radar.appendChild(blip);
+            
+            // Fade out and remove
+            anime({
+                targets: blip,
+                opacity: [1, 0],
+                scale: [1, 1.5],
+                duration: 2000,
+                easing: 'easeOutQuad',
+                complete: function() {
+                    blip.remove();
+                }
+            });
+        }
+        
+        setInterval(addRandomBlips, 2000);
+        
+        // Initial update
+        updateSensors();
+        checkAlert();
+    </script>
+</body>
+</html>
